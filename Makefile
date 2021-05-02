@@ -52,7 +52,7 @@ CFLAGS	:=	-g -Wall -O2 -mword-relocations \
 
 CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS
 
-CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
+CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11 -Wno-psabi
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
@@ -65,6 +65,11 @@ LIBS	:= -lctru -lm
 #---------------------------------------------------------------------------------
 LIBDIRS	:= $(CTRULIB)
 
+ifeq ($(MAKECMDGOALS),test)
+SOURCES		+= lib/munit tests
+INCLUDES	+= lib/munit tests
+CFLAGS		+= -DRUN_TESTS=1
+endif
 
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
@@ -158,11 +163,11 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean
+.PHONY: all clean test
 
 #---------------------------------------------------------------------------------
 all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $(MAKECMDGOALS)
 
 $(BUILD):
 	@mkdir -p $@
@@ -176,6 +181,8 @@ ifneq ($(DEPSDIR),$(BUILD))
 $(DEPSDIR):
 	@mkdir -p $@
 endif
+
+test: clean all;
 
 #---------------------------------------------------------------------------------
 clean:
@@ -249,6 +256,9 @@ endef
 	@tex3ds -i $< -H $*.h -d $*.d -o $*.t3x
 
 -include $(DEPSDIR)/*.d
+
+test: CFLAGS += -DRUN_TESTS=1
+test: $(OUTPUT).3dsx
 
 #---------------------------------------------------------------------------------------
 endif
