@@ -33,9 +33,9 @@ include $(DEVKITARM)/3ds_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source lib/duktape lib/event
+SOURCES		:=	source lib/duktape
 DATA		:=	data
-INCLUDES	:=	include lib/duktape lib/event
+INCLUDES	:=	include lib/duktape lib
 GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
 ROMFS		:=	romfs
