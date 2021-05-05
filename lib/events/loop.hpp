@@ -14,7 +14,7 @@ private:
     timer_queue timers;
 
 public:
-    loop(std::shared_ptr<os_interface>& os) : os(os) {}
+    loop(std::shared_ptr<os_interface> os) : os(os) {}
 
     void process() {
         auto current_tick = os->get_monotonic_tick();

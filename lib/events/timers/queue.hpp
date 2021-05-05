@@ -9,6 +9,10 @@
 
 namespace events {
 
+inline bool timer_pointer_greater(std::shared_ptr<timer>& lhs, std::shared_ptr<timer>& rhs) {
+    return lhs->timeout > rhs->timeout;
+}
+
 class timer_queue {
 private:
     std::vector<std::shared_ptr<timer>> timers;
@@ -95,9 +99,5 @@ public:
         return false;
     }
 };
-
-inline bool timer_pointer_greater(std::shared_ptr<timer>& lhs, std::shared_ptr<timer>& rhs) {
-    return lhs->timeout > rhs->timeout;
-}
 
 };
