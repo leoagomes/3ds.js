@@ -33,6 +33,10 @@ public:
         return processed_count;
     }
 
+    bool empty() {
+        return current_tasks.empty();
+    }
+
     void add_task(task_fn callback) {
         next_tasks.push_front(callback);
     }

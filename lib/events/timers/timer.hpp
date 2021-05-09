@@ -10,22 +10,32 @@ enum timer_op { discard, rearm };
 typedef std::function<timer_op(void)> timer_callback;
 
 struct timer {
-    uint64_t timeout, interval;
+private:
+    uint64_t timeout, interval_ticks;
     timer_callback callback;
 
+public:
     timer(
-        uint64_t interval,
-        uint64_t timeout,
-        timer_callback callback
-    ) : timeout(timeout),
-        interval(interval),
+        uint64_t interval_ticks,
+        timer_callback callback = nullptr
+    ) : interval_ticks(interval_ticks),
         callback(callback) {}
 
     inline timer_op operator()() { return callback(); }
 
-    inline void rearm() {
-        timeout += interval;
+    void arm(uint64_t current_tick) {
+        timeout = current_tick + interval_ticks;
     }
+
+    inline void rearm() {
+        timeout += interval_ticks;
+    }
+
+    void set_callback(timer_callback callback) {
+        this->callback = callback;
+    }
+
+    uint64_t get_timeout() { return timeout; }
 };
 
 };

@@ -10,7 +10,7 @@
 namespace events {
 
 inline bool timer_pointer_greater(std::shared_ptr<timer>& lhs, std::shared_ptr<timer>& rhs) {
-    return lhs->timeout > rhs->timeout;
+    return lhs->get_timeout() > rhs->get_timeout();
 }
 
 class timer_queue {
@@ -48,7 +48,7 @@ public:
         if (timers.empty()) return 0;
 
         unsigned int processed_count = 0;
-        while (timers.front()->timeout <= current_tick) {
+        while (!timers.empty() && timers.front()->get_timeout() <= current_tick) {
             auto timer = pop_timer();
 
             if (timer->operator()() == timer_op::rearm) {
@@ -61,18 +61,8 @@ public:
         return processed_count;
     }
 
-    std::shared_ptr<timer> add(
-        uint64_t current_tick,
-        uint64_t interval,
-        timer_callback callback
-    ) {
-        auto t = std::make_shared<timer>(
-            interval,
-            current_tick + interval,
-            callback
-        );
-        push_timer(t);
-        return t;
+    void add(std::shared_ptr<timer>& timer) {
+        push_timer(timer);
     }
 
     bool remove(std::shared_ptr<timer>& timer) {
