@@ -1,10 +1,10 @@
 #pragma once
 
-#include "event_loop.hpp"
+#include "events/loop.hpp"
 
-namespace ev {
+namespace ctr {
 
-class ctr_os_interface : public event::os_interface {
+class os_interface : public events::os_interface {
 public:
     uint64_t get_monotonic_tick();
     uint64_t millis_to_ticks(uint64_t millis);

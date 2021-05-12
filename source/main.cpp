@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <3ds.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #include <iostream>
 #include <fstream>
@@ -9,7 +11,7 @@
 #include <sstream>
 
 #include "duktape.h"
-#include "event_loop.hpp"
+#include "events/loop.hpp"
 
 #include "globals.hpp"
 #include "ev.hpp"
@@ -29,17 +31,14 @@ int main(int argc, char* argv[]) {
         printf("[ERROR][JS] %s\n", duk_safe_to_string(js::context, -1));
     }
 
-    // Main loop
-    while (aptMainLoop())
-    {
+    while (aptMainLoop()) {
         gspWaitForVBlank();
         gfxSwapBuffers();
         hidScanInput();
 
-        // Your code goes here
         u32 kDown = hidKeysDown();
         if (kDown & KEY_START)
-            break; // break in order to return to hbmenu
+            break;
 
         ev::loop->process();
     }
@@ -52,6 +51,7 @@ void init_app() {
     gfxInitDefault();
     consoleInit(GFX_TOP, NULL);
     if (romfsInit()) exit(1);
+    if (fsInit()) exit(1);
 
     ev::init();
     js::init();
@@ -61,6 +61,8 @@ void terminate_app() {
     js::terminate();
     ev::terminate();
 
+
+    fsExit();
     romfsExit();
     gfxExit();
 }

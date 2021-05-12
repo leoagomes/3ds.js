@@ -103,7 +103,7 @@ static void duk__console_reg_vararg_func(duk_context *ctx, duk_c_function func, 
     duk_put_prop_string(ctx, -2, name);
 }
 
-void duk_console_init(duk_context *ctx, duk_uint_t flags) {
+void js::console::init(duk_context *ctx, duk_uint_t flags) {
     duk_uint_t flags_orig;
 
     /* If both DUK_CONSOLE_STDOUT_ONLY and DUK_CONSOLE_STDERR_ONLY where specified,

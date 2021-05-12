@@ -2,11 +2,11 @@
 
 #include <memory>
 
-#include "event_loop.hpp"
+#include "events/loop.hpp"
 
 namespace ev {
 
-extern std::unique_ptr<event::loop> loop;
+extern std::shared_ptr<events::loop> loop;
 
 void init();
 void terminate();

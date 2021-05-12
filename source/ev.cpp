@@ -1,14 +1,14 @@
 #include "ev.hpp"
 
-#include "ev_ctr_os_interface.hpp"
+#include "ctr_os_interface.hpp"
 
 namespace ev {
 
-std::unique_ptr<event::loop> loop = nullptr;
+std::shared_ptr<events::loop> loop = nullptr;
 
 void init() {
-    auto os_interface = std::make_shared<ctr_os_interface>();
-    loop = std::make_unique<event::loop>(os_interface);
+    auto os_interface = std::make_shared<ctr::os_interface>();
+    loop = std::make_shared<events::loop>(os_interface);
 }
 
 void terminate() {}
