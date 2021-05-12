@@ -4,19 +4,25 @@
 #include <fstream>
 #include <sstream>
 
+#include "ctr_fs_interface.hpp"
 #include "js_console.hpp"
+#include "js_module.hpp"
+#include "js_modules.hpp"
 
 // globals
 duk_context* js::context = nullptr;
 
 // forward declarations
 static void init_context();
-static void init_console();
 static void terminate_context();
 
 void js::init() {
     init_context();
-    init_console();
+
+    js::console::init(js::context, DUK_CONSOLE_FLUSH);
+    js::modules::native_loaders(js::context);
+    js::module::fs = std::make_shared<ctr::fs_interface>();
+    js::module::init(js::context);
 }
 
 void js::terminate() {
@@ -40,10 +46,6 @@ int js::run_file(std::string& filename) {
 static void init_context() {
     js::context = duk_create_heap_default();
     if (!js::context) { exit(1); }
-}
-
-static void init_console() {
-    duk_console_init(js::context, DUK_CONSOLE_FLUSH);
 }
 
 static void terminate_context() {
