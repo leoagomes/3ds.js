@@ -13,7 +13,6 @@
 #include "duktape.h"
 #include "events/loop.hpp"
 
-#include "globals.hpp"
 #include "ev.hpp"
 #include "js.hpp"
 

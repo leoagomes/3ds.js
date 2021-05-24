@@ -69,7 +69,7 @@ int callback_resolve_module(duk_context* context) {
 
     duk_push_sprintf(context, "%s.js", module_id.c_str());
 
-    return duk_error(context, DUK_ERR_ERROR, "module '%s' can not be resolved.", module_id);
+    return duk_error(context, DUK_ERR_ERROR, "module '%s' can not be resolved.", module_id.c_str());
 }
 
 int callback_load_module(duk_context* context) {
