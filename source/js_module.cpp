@@ -1,413 +1,283 @@
 /*
- *  Node.js-like module loading framework for Duktape
- *
- *  https://nodejs.org/api/modules.html
+ * A weird mix between a CommonJS module loader and Node.js semantics.
+ * 
+ * It does really poor package name resolution and prioritizes `js_modules`
+ * instead of `node_modules`. Keep in mind you should try your best to keep
+ * these applications simple at the moment.
+ * 
+ * Heavily based on:
+ * - https://nodejs.org/api/modules.html
+ * - https://github.com/svaarala/duktape/tree/master/extras/module-duktape
+ * - https://wiki.duktape.org/howtomodules
  */
 
 #include "duktape.h"
 #include "js_module.hpp"
+#include "js_utils.hpp"
+#include "duk_module_duktape.h"
 
 #include <string>
 #include <cstdio>
 
-#define NATIVE_MODULES_STASH_KEY "::native_modules::"
-#define FS_INTERFACE_STASH_KEY "::module::fs_interface::"
+#define CORE_MODULES_STASH_KEY "module/core-modules"
 
 extern "C" {
-int callback_resolve_module(duk_context* context);
-int callback_load_module(duk_context* context);
-
-duk_ret_t duk_module_node_peval_main(duk_context *ctx, const char *path);
-void duk_module_node_init(duk_context *ctx);
+duk_ret_t cb_module_search(duk_context* context);
 };
 
-namespace js::module {
+std::shared_ptr<js::module::fs_interface> js::module::fs = nullptr;
 
-std::shared_ptr<fs_interface> fs = nullptr;
-std::string root_path = "";
+void set_core_module_loader_stash(duk_context* context);
+void set_module_search_function(duk_context* context);
+void set_module_dirs(duk_context* context);
+// expects a core module map to be on the top of the stack
+void js::module::init(duk_context* context) {
+    set_core_module_loader_stash(context);
+    duk_module_duktape_init(context);
+    set_module_search_function(context);
+    set_module_dirs(context);
+}
 
-// expects a native module map to be on the top of the stack
-void init(duk_context* context) {
+void set_core_module_loader_stash(duk_context* context) {
     duk_push_global_stash(context);
     duk_dup(context, -2);
-    duk_put_prop_literal(context, -2, NATIVE_MODULES_STASH_KEY);
-
-    duk_push_object(context);
-    duk_push_c_function(context, callback_resolve_module, DUK_VARARGS);
-    duk_put_prop_literal(context, -2, "resolve");
-    duk_push_c_function(context, callback_load_module, DUK_VARARGS);
-    duk_put_prop_literal(context, -2, "load");
-    duk_module_node_init(context);
+    duk_put_prop_literal(context, -2, CORE_MODULES_STASH_KEY);
 }
 
+void set_module_search_function(duk_context* context){
+    duk_get_global_literal(context, "Duktape");
+    duk_push_c_function(context, cb_module_search, 4);
+    duk_put_prop_string(context, -2, "modSearch");
+    duk_pop(context);
+}
+
+void set_module_dirs(duk_context* context) {
+    duk_get_global_literal(context, "Duktape");
+    auto array_index = duk_push_array(context);
+    int item_index = 0;
+    for (const auto& dir : {
+        "romfs:/js_modules/",
+        "romfs:/node_modules/",
+        "js_modules/",
+        "node_modules/",
+        "/js_modules/",
+        "/node_modules/",
+    }) {
+        duk_push_string(context, dir);
+        duk_put_prop_index(context, array_index, item_index++);
+    }
+    duk_put_prop_literal(context, -2, "modDirs");
+    duk_pop(context);
+}
+
+enum loaded_file_type {
+    type_none = 0,
+    type_js   = 1,
+    type_json = 2,
 };
 
-int callback_resolve_module(duk_context* context) {
-    std::string module_id = duk_require_string(context, 0);
-    std::string parent_id = duk_require_string(context, 1);
+bool load_core_module(duk_context* context, const char* module_id);
+loaded_file_type load_as_file(
+    duk_context* context,
+    const std::filesystem::path& module_path
+);
+loaded_file_type load_as_directory(
+    duk_context* context,
+    const std::filesystem::path& path
+);
+loaded_file_type load_module_dirs(
+    duk_context* context,
+    const std::filesystem::path& path
+);
+duk_ret_t cb_module_search(duk_context* context) {
+    auto module_id = duk_require_string(context, 0);
+    auto module_path = std::filesystem::path(module_id);
 
-    printf(
-        "resolve callback {\n\tmodule_id = %s\n\tparent_id = %s\n}\n",
-        module_id.c_str(),
-        parent_id.c_str()
-    );
+    module_path = std::string("romfs:/") + module_path.string();
 
-    duk_push_global_stash(context);
-    duk_get_prop_literal(context, -1, NATIVE_MODULES_STASH_KEY);
-    duk_require_object(context, -1);
-    if (duk_has_prop_string(context, -1, module_id.c_str())) {
-        duk_dup(context, 0);
-        return 1;
+    if (load_core_module(context, module_id)) {
+        // module.exports should be on top of the stack
+        duk_put_prop_literal(context, 3 /* module object*/, "exports");
+        return 0; // no js code
     }
 
-    auto path = std::filesystem::path(module_id);
-
-    if (js::module::fs->exists(path)) {
-        duk_push_string(context, module_id.c_str());
-        return 1;
+    switch (load_as_file(context, module_path)) {
+    case loaded_file_type::type_js:   goto return_js;
+    case loaded_file_type::type_json: goto return_json;
+    default: break;
     }
 
-    duk_push_sprintf(context, "%s.js", module_id.c_str());
+    switch (load_as_directory(context, module_path)) {
+    case loaded_file_type::type_js:   goto return_js;
+    case loaded_file_type::type_json: goto return_json;
+    default: break;
+    }
+
+    switch (load_module_dirs(context, module_path)) {
+    case loaded_file_type::type_js:   goto return_js;
+    case loaded_file_type::type_json: goto return_json;
+    default: break;
+    }
 
     return duk_error(context, DUK_ERR_ERROR, "module '%s' can not be resolved.", module_id);
-}
 
-int callback_load_module(duk_context* context) {
-    std::string module_id = duk_require_string(context, 0);
+    return_js:
+    return 1;
 
-    duk_get_prop_string(context, 2, "filename");
-    std::string filename = duk_require_string(context, -1);
-
-    printf(
-        "load callback {\n\tmodule_id = %s\n\tfilename = %s\n}\n",
-        module_id.c_str(),
-        filename.c_str()
-    );
-
+    return_json:
+    duk_put_prop_literal(context, 3 /* module object */, "exports");
     return 0;
 }
 
-#if DUK_VERSION >= 19999
-static duk_int_t duk__eval_module_source(duk_context *ctx, void *udata);
-#else
-static duk_int_t duk__eval_module_source(duk_context *ctx);
-#endif
-static void duk__push_module_object(duk_context *ctx, const char *id, duk_bool_t main);
-
-static duk_bool_t duk__get_cached_module(duk_context *ctx, const char *id) {
-    duk_push_global_stash(ctx);
-    (void) duk_get_prop_string(ctx, -1, "\xff" "requireCache");
-    if (duk_get_prop_string(ctx, -1, id)) {
-        duk_remove(ctx, -2);
-        duk_remove(ctx, -2);
-        return 1;
-    } else {
-        duk_pop_3(ctx);
-        return 0;
+bool load_core_module(duk_context* context, const char* module_id) {
+    duk_push_global_stash(context);
+    duk_get_prop_literal(context, -1, CORE_MODULES_STASH_KEY);
+    duk_require_object(context, -1);
+    if (duk_get_prop_string(context, -1, module_id)) {
+        duk_call(context, 0);
+        return true;
     }
+    return false;
 }
 
-/* Place a `module` object on the top of the value stack into the require cache
- * based on its `.id` property.  As a convenience to the caller, leave the
- * object on top of the value stack afterwards.
- */
-static void duk__put_cached_module(duk_context *ctx) {
-    /* [ ... module ] */
-
-    duk_push_global_stash(ctx);
-    (void) duk_get_prop_string(ctx, -1, "\xff" "requireCache");
-    duk_dup(ctx, -3);
-
-    /* [ ... module stash req_cache module ] */
-
-    (void) duk_get_prop_string(ctx, -1, "id");
-    duk_dup(ctx, -2);
-    duk_put_prop(ctx, -4);
-
-    duk_pop_3(ctx);  /* [ ... module ] */
-}
-
-static void duk__del_cached_module(duk_context *ctx, const char *id) {
-    duk_push_global_stash(ctx);
-    (void) duk_get_prop_string(ctx, -1, "\xff" "requireCache");
-    duk_del_prop_string(ctx, -1, id);
-    duk_pop_2(ctx);
-}
-
-static duk_ret_t duk__handle_require(duk_context *ctx) {
-    /*
-     *  Value stack handling here is a bit sloppy but should be correct.
-     *  Call handling will clean up any extra garbage for us.
-     */
-
-    const char *id;
-    const char *parent_id;
-    duk_idx_t module_idx;
-    duk_idx_t stash_idx;
-    duk_int_t ret;
-
-    duk_push_global_stash(ctx);
-    stash_idx = duk_normalize_index(ctx, -1);
-
-    duk_push_current_function(ctx);
-    (void) duk_get_prop_string(ctx, -1, "\xff" "moduleId");
-    parent_id = duk_require_string(ctx, -1);
-    (void) parent_id;  /* not used directly; suppress warning */
-
-    /* [ id stash require parent_id ] */
-
-    id = duk_require_string(ctx, 0);
-
-    (void) duk_get_prop_string(ctx, stash_idx, "\xff" "modResolve");
-    duk_dup(ctx, 0);   /* module ID */
-    duk_dup(ctx, -3);  /* parent ID */
-    duk_call(ctx, 2);
-
-    /* [ ... stash ... resolved_id ] */
-
-    id = duk_require_string(ctx, -1);
-
-    if (duk__get_cached_module(ctx, id)) {
-        goto have_module;  /* use the cached module */
+static bool try_load_js(
+    duk_context* context,
+    const std::filesystem::path& path
+);
+static bool try_load_json(
+    duk_context* context,
+    const std::filesystem::path& path
+);
+loaded_file_type load_as_file(
+    duk_context* context,
+    const std::filesystem::path& module_path
+) {
+    auto module_extension = module_path.extension();
+    if (module_extension == ".js" &&
+        try_load_js(context, module_path))
+        return loaded_file_type::type_js; // file contents on top of stack
+    if (module_extension == ".json" &&
+        try_load_json(context, module_path)) {
+        duk_put_prop_literal(context, 3 /* module object */, "exports");
+        return loaded_file_type::type_json;
     }
 
-    duk__push_module_object(ctx, id, 0 /*main*/);
-    duk__put_cached_module(ctx);  /* module remains on stack */
+    /* this is where we will try to load native modules some day */
 
-    /*
-     *  From here on out, we have to be careful not to throw.  If it can't be
-     *  avoided, the error must be caught and the module removed from the
-     *  require cache before rethrowing.  This allows the application to
-     *  reattempt loading the module.
-     */
+    auto copy_path = std::filesystem::path(module_path);
+    copy_path += ".js";
+    if (try_load_js(context, copy_path))
+        return loaded_file_type::type_js;
 
-    module_idx = duk_normalize_index(ctx, -1);
+    copy_path.replace_extension(".json");
+    if (try_load_json(context, copy_path))
+        return loaded_file_type::type_json;
 
-    /* [ ... stash ... resolved_id module ] */
+    /* this is where we will try to load native modules some day */
 
-    (void) duk_get_prop_string(ctx, stash_idx, "\xff" "modLoad");
-    duk_dup(ctx, -3);  /* resolved ID */
-    (void) duk_get_prop_string(ctx, module_idx, "exports");
-    duk_dup(ctx, module_idx);
-    ret = duk_pcall(ctx, 3);
-    if (ret != DUK_EXEC_SUCCESS) {
-        duk__del_cached_module(ctx, id);
-        (void) duk_throw(ctx);  /* rethrow */
-    }
+    return loaded_file_type::type_none;
+}
 
-    if (duk_is_string(ctx, -1)) {
-        duk_int_t ret;
-
-        /* [ ... module source ] */
-
-#if DUK_VERSION >= 19999
-        ret = duk_safe_call(ctx, duk__eval_module_source, NULL, 2, 1);
-#else
-        ret = duk_safe_call(ctx, duk__eval_module_source, 2, 1);
-#endif
-        if (ret != DUK_EXEC_SUCCESS) {
-            duk__del_cached_module(ctx, id);
-            (void) duk_throw(ctx);  /* rethrow */
+loaded_file_type load_index(
+    duk_context* context,
+    const std::filesystem::path& path
+);
+loaded_file_type load_as_directory(
+    duk_context* context,
+    const std::filesystem::path& path
+) {
+    auto module_path = std::filesystem::path(path) / "package.json";
+    if (try_load_json(context, module_path)) {
+        duk_get_prop_literal(context, -1, "main");
+        if (duk_is_string(context, -1)) {
+            auto main_file_path =
+                std::filesystem::path(path) / duk_get_string(context, -1);
+            auto result = load_as_file(context, main_file_path);
+            if (result != loaded_file_type::type_none) return result;
+            result = load_as_directory(context, main_file_path);
+            if (result != loaded_file_type::type_none) return result;
         }
-    } else if (duk_is_undefined(ctx, -1)) {
-        duk_pop(ctx);
-    } else {
-        duk__del_cached_module(ctx, id);
-        (void) duk_type_error(ctx, "invalid module load callback return value");
     }
 
-    /* fall through */
-
- have_module:
-    /* [ ... module ] */
-
-    (void) duk_get_prop_string(ctx, -1, "exports");
-    return 1;
+    return load_index(context, path);
 }
 
-static void duk__push_require_function(duk_context *ctx, const char *id) {
-    duk_push_c_function(ctx, duk__handle_require, 1);
-    duk_push_string(ctx, "name");
-    duk_push_string(ctx, "require");
-    duk_def_prop(ctx, -3, DUK_DEFPROP_HAVE_VALUE);
-    duk_push_string(ctx, id);
-    duk_put_prop_string(ctx, -2, "\xff" "moduleId");
+loaded_file_type load_module_dirs(
+    duk_context* context,
+    const std::filesystem::path& path
+) {
+    /* get module dirs array */
+    duk_get_global_literal(context, "Duktape");
+    duk_get_prop_literal(context, -1, "modDirs");
+    if (!duk_is_array(context, -1))
+        return loaded_file_type::type_none;
 
-    /* require.cache */
-    duk_push_global_stash(ctx);
-    (void) duk_get_prop_string(ctx, -1, "\xff" "requireCache");
-    duk_put_prop_string(ctx, -3, "cache");
-    duk_pop(ctx);
+    auto array_index = duk_get_top_index(context);
 
-    /* require.main */
-    duk_push_global_stash(ctx);
-    (void) duk_get_prop_string(ctx, -1, "\xff" "mainModule");
-    duk_put_prop_string(ctx, -3, "main");
-    duk_pop(ctx);
-}
+    auto length = duk_get_length(context, -1);
+    for (unsigned int i = 0; i < length; i++) {
+        duk_get_prop_index(context, array_index, i);
+        auto dir = duk_require_string(context, -1);
+        auto dir_path = std::filesystem::path(dir);
+        dir_path /= path;
 
-static void duk__push_module_object(duk_context *ctx, const char *id, duk_bool_t main) {
-    duk_push_object(ctx);
+        auto result = load_as_file(context, dir_path);
+        if (result != loaded_file_type::type_none)
+            return result;
 
-    /* Set this as the main module, if requested */
-    if (main) {
-        duk_push_global_stash(ctx);
-        duk_dup(ctx, -2);
-        duk_put_prop_string(ctx, -2, "\xff" "mainModule");
-        duk_pop(ctx);
+        result = load_as_directory(context, dir_path);
+        if (result != loaded_file_type::type_none)
+            return result;
+
+        duk_pop(context);
     }
 
-    /* Node.js uses the canonicalized filename of a module for both module.id
-     * and module.filename.  We have no concept of a file system here, so just
-     * use the module ID for both values.
-     */
-    duk_push_string(ctx, id);
-    duk_dup(ctx, -1);
-    duk_put_prop_string(ctx, -3, "filename");
-    duk_put_prop_string(ctx, -2, "id");
-
-    /* module.exports = {} */
-    duk_push_object(ctx);
-    duk_put_prop_string(ctx, -2, "exports");
-
-    /* module.loaded = false */
-    duk_push_false(ctx);
-    duk_put_prop_string(ctx, -2, "loaded");
-
-    /* module.require */
-    duk__push_require_function(ctx, id);
-    duk_put_prop_string(ctx, -2, "require");
+    return loaded_file_type::type_none;
 }
 
-#if DUK_VERSION >= 19999
-static duk_int_t duk__eval_module_source(duk_context *ctx, void *udata) {
-#else
-static duk_int_t duk__eval_module_source(duk_context *ctx) {
-#endif
-    const char *src;
+loaded_file_type load_index(
+    duk_context* context,
+    const std::filesystem::path& path
+) {
+    auto index_path = std::filesystem::path(path) / "index.js";
+    if (try_load_js(context, index_path))
+        return loaded_file_type::type_js;
 
-    /*
-     *  Stack: [ ... module source ]
-     */
+    index_path.replace_extension(".json");
+    if (try_load_json(context, index_path))
+        return loaded_file_type::type_json;
 
-#if DUK_VERSION >= 19999
-    (void) udata;
-#endif
-
-    /* Wrap the module code in a function expression.  This is the simplest
-     * way to implement CommonJS closure semantics and matches the behavior of
-     * e.g. Node.js.
-     */
-    duk_push_string(ctx, "(function(exports,require,module,__filename,__dirname){");
-    src = duk_require_string(ctx, -2);
-    duk_push_string(ctx, (src[0] == '#' && src[1] == '!') ? "//" : "");  /* Shebang support. */
-    duk_dup(ctx, -3);  /* source */
-    duk_push_string(ctx, "\n})");  /* Newline allows module last line to contain a // comment. */
-    duk_concat(ctx, 4);
-
-    /* [ ... module source func_src ] */
-
-    (void) duk_get_prop_string(ctx, -3, "filename");
-    duk_compile(ctx, DUK_COMPILE_EVAL);
-    duk_call(ctx, 0);
-
-    /* [ ... module source func ] */
-
-    /* Set name for the wrapper function. */
-    duk_push_string(ctx, "name");
-    duk_push_string(ctx, "main");
-    duk_def_prop(ctx, -3, DUK_DEFPROP_HAVE_VALUE | DUK_DEFPROP_FORCE);
-
-    /* call the function wrapper */
-    (void) duk_get_prop_string(ctx, -3, "exports");   /* exports */
-    (void) duk_get_prop_string(ctx, -4, "require");   /* require */
-    duk_dup(ctx, -5);                                 /* module */
-    (void) duk_get_prop_string(ctx, -6, "filename");  /* __filename */
-    duk_push_undefined(ctx);                          /* __dirname */
-    duk_call(ctx, 5);
-
-    /* [ ... module source result(ignore) ] */
-
-    /* module.loaded = true */
-    duk_push_true(ctx);
-    duk_put_prop_string(ctx, -4, "loaded");
-
-    /* [ ... module source retval ] */
-
-    duk_pop_2(ctx);
-
-    /* [ ... module ] */
-
-    return 1;
+    return loaded_file_type::type_none;
 }
 
-/* Load a module as the 'main' module. */
-duk_ret_t duk_module_node_peval_main(duk_context *ctx, const char *path) {
-    /*
-     *  Stack: [ ... source ]
-     */
-
-    duk__push_module_object(ctx, path, 1 /*main*/);
-    /* [ ... source module ] */
-
-    duk_dup(ctx, 0);
-    /* [ ... source module source ] */
-
-#if DUK_VERSION >= 19999
-    return duk_safe_call(ctx, duk__eval_module_source, NULL, 2, 1);
-#else
-    return duk_safe_call(ctx, duk__eval_module_source, 2, 1);
-#endif
+bool load_file_contents(
+    duk_context* context,
+    const std::filesystem::path& path
+);
+static bool try_load_js(
+    duk_context* context,
+    const std::filesystem::path& path
+) {
+    return load_file_contents(context, path);
 }
 
-void duk_module_node_init(duk_context *ctx) {
-    /*
-     *  Stack: [ ... options ] => [ ... ]
-     */
+static bool try_load_json(
+    duk_context* context,
+    const std::filesystem::path& path
+) {
+    if (!load_file_contents(context, path))
+        return false;
+    duk_json_decode(context, -1);
+    return true;
+}
 
-    duk_idx_t options_idx;
+bool load_file_contents(
+    duk_context* context,
+    const std::filesystem::path& path
+) {
+    if (!js::module::fs->is_file(path))
+        return false;
 
-    duk_require_object_coercible(ctx, -1);  /* error before setting up requireCache */
-    options_idx = duk_require_normalize_index(ctx, -1);
-
-    /* Initialize the require cache to a fresh object. */
-    duk_push_global_stash(ctx);
-#if DUK_VERSION >= 19999
-    duk_push_bare_object(ctx);
-#else
-    duk_push_object(ctx);
-    duk_push_undefined(ctx);
-    duk_set_prototype(ctx, -2);
-#endif
-    duk_put_prop_string(ctx, -2, "\xff" "requireCache");
-    duk_pop(ctx);
-
-    /* Stash callbacks for later use.  User code can overwrite them later
-     * on directly by accessing the global stash.
-     */
-    duk_push_global_stash(ctx);
-    duk_get_prop_string(ctx, options_idx, "resolve");
-    duk_require_function(ctx, -1);
-    duk_put_prop_string(ctx, -2, "\xff" "modResolve");
-    duk_get_prop_string(ctx, options_idx, "load");
-    duk_require_function(ctx, -1);
-    duk_put_prop_string(ctx, -2, "\xff" "modLoad");
-    duk_pop(ctx);
-
-    /* Stash main module. */
-    duk_push_global_stash(ctx);
-    duk_push_undefined(ctx);
-    duk_put_prop_string(ctx, -2, "\xff" "mainModule");
-    duk_pop(ctx);
-
-    /* register `require` as a global function. */
-    duk_push_global_object(ctx);
-    duk_push_string(ctx, "require");
-    duk__push_require_function(ctx, "");
-    duk_def_prop(ctx, -3, DUK_DEFPROP_HAVE_VALUE |
-                          DUK_DEFPROP_SET_WRITABLE |
-                          DUK_DEFPROP_SET_CONFIGURABLE);
-    duk_pop(ctx);
-
-    duk_pop(ctx);  /* pop argument */
+    js::utils::read_file(context, path);
+    return true;
 }

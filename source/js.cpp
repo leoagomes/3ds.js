@@ -29,7 +29,7 @@ void js::terminate() {
     terminate_context();
 }
 
-int js::run_file(std::string& filename) {
+int js::run_file(const std::string& filename) {
     std::ifstream file(filename);
     std::stringstream buffer;
     buffer << file.rdbuf();

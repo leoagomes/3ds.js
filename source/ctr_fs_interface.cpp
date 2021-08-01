@@ -7,12 +7,12 @@
 
 namespace ctr {
 
-bool fs_interface::exists(std::filesystem::path& path) {
+bool fs_interface::exists(const std::filesystem::path& path) {
     struct stat buffer;
     return stat(path.c_str(), &buffer) == 0;
 }
 
-bool fs_interface::is_file(std::filesystem::path& path) {
+bool fs_interface::is_file(const std::filesystem::path& path) {
     struct stat buffer;
     if (stat(path.c_str(), &buffer) == 0) {
         return S_ISREG(buffer.st_mode);
@@ -20,7 +20,7 @@ bool fs_interface::is_file(std::filesystem::path& path) {
     return false;
 }
 
-bool fs_interface::is_directory(std::filesystem::path& path) {
+bool fs_interface::is_directory(const std::filesystem::path& path) {
     struct stat buffer;
     if (stat(path.c_str(), &buffer) == 0) {
         return S_ISDIR(buffer.st_mode);

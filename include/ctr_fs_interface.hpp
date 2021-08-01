@@ -7,9 +7,9 @@ namespace ctr {
 class fs_interface : public js::module::fs_interface {
 private:
 public:
-    bool exists(std::filesystem::path& path);
-    bool is_file(std::filesystem::path& path);
-    bool is_directory(std::filesystem::path& path);
+    bool exists(const std::filesystem::path& path);
+    bool is_file(const std::filesystem::path& path);
+    bool is_directory(const std::filesystem::path& path);
 };
 
 };

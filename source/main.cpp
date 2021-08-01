@@ -13,9 +13,10 @@
 #include "duktape.h"
 #include "events/loop.hpp"
 
-#include "globals.hpp"
 #include "ev.hpp"
 #include "js.hpp"
+
+#define RUN_TESTSUITE_JS 1
 
 // forward declarations
 void init_app();
@@ -25,6 +26,15 @@ int run_file(duk_context* context, std::string& filename);
 
 int main(int argc, char* argv[]) {
     init_app();
+
+#if RUN_TESTSUITE_JS
+    do {
+        std::string testsuite = "romfs:/testsuite.js";
+        if (js::run_file(testsuite)) {
+            printf("[ERROR][JS] %s\n", duk_safe_to_string(js::context, -1));
+        }
+    } while(0);
+#endif
 
     std::string filename = "romfs:/index.js";
     if (js::run_file(filename)) {
@@ -60,7 +70,6 @@ void init_app() {
 void terminate_app() {
     js::terminate();
     ev::terminate();
-
 
     fsExit();
     romfsExit();

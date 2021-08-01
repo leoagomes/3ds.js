@@ -1,1 +1,3 @@
-console.log('hello!\n')
+console.log('Hello, from index.js')
+
+require('./thingie');
