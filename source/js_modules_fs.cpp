@@ -14,6 +14,7 @@ duk_ret_t fs_fopen(duk_context* context);
 duk_ret_t fs_filehandle_close(duk_context* context);
 duk_ret_t fs_filehandle_flush(duk_context* context);
 duk_ret_t fs_filehandle_finalizer(duk_context* context);
+duk_ret_t fs_filehandle_to_string(duk_context* context);
 };
 
 duk_ret_t js::modules::fs::open(duk_context* context) {
@@ -48,6 +49,7 @@ void push_new_file_handle_prototype(duk_context* context) {
     duk_function_list_entry function_list[] = {
         { .key = "close", .value = fs_filehandle_close, .nargs = 0 },
         { .key = "flush", .value = fs_filehandle_flush, .nargs = 0 },
+        { .key = "toString", .value = fs_filehandle_to_string, .nargs = 0 },
         { 0 }
     };
     duk_put_function_list(context, -1, function_list);
@@ -85,7 +87,7 @@ duk_ret_t fs_fopen(duk_context* context) {
     duk_put_prop_literal(context, -2, FILEHANDLE_THIS_HANDLE_KEY);
 
     push_stash_filehandle_prototype(context);
-    duk_set_prototype(context, -1);
+    duk_set_prototype(context, -2);
     return 1;
 }
 
@@ -126,4 +128,9 @@ duk_ret_t fs_filehandle_finalizer(duk_context* context) {
     duk_push_pointer(context, nullptr); // set file pointer to null
     duk_put_prop_literal(context, 0, FILEHANDLE_THIS_HANDLE_KEY);
     return 0;
+}
+
+duk_ret_t fs_filehandle_to_string(duk_context* context) {
+    duk_push_string(context, "[FileHandle object]");
+    return 1;
 }
