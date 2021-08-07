@@ -8,6 +8,6 @@ bool js::utils::read_file(duk_context* context, const std::string& path) {
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string contents = buffer.str();
-    duk_push_string(context, path.c_str());
+    duk_push_string(context, contents.c_str());
     return 1;
 }
