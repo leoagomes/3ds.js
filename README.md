@@ -1,6 +1,20 @@
 # 3DS.js
 
-A (Homebrew) JavaScript runtime for the Nintendo 3DS.
+A (very early stage) (Homebrew) JavaScript runtime for the Nintendo 3DS.
+
+## Getting Started
+
+- [set up a 3DS build environment](https://3dbrew.org/wiki/Setting_up_Development_Environment). (You'll also need [Node](https://nodejs.org/en/) and [Yarn](https://yarnpkg.com/).)
+- clone this repository (`git clone https://github.com/leoagomes/3ds.js.git && cd 3ds.js`)
+- treat the `/js` subdirectory as your normal JavaScript aplication ([Code]() works great!)
+- run `make`
+- use `3ds.js.3dsx` however you like ([emulator](https://citra-emu.org/) or [hacked 3ds](https://3ds.hacks.guide/))
+
+If you're fine with writing only ES5.1 code where the `require` system is really
+unstable (though nothing is _really_ stable at the moment), you can bypass JS
+bundling and just write directly to an `index.js` in `romfs`.
+
+## Motivation
 
 My ultimate goal for this project is to have something compatible enough with
 other JS runtimes as to be able to run both React (probably closer to React
@@ -21,22 +35,22 @@ directly).
 
 ## Features
 
-3DS.js is currently able to run anything [Duktape](https://duktape.org) can run
-out of the box, with `console.log` support and a couple incomplete "core" modules:
-`3ds/fs/sync` a synchronous IO interface modeled around `stdio.h`, `3ds/event-loop`
-the JS interface to the internal event loop implementation. I'll try to document
-all JS API by providing type definitions (currently at `roms/3ds.d.ts`) along
-with documentation comments.
+Currently, the only api that is stable is whatever [Duktape](https://duktape.org)
+provides out of the box plus `console.log`. Everything else is really subject to
+change.
+
+If you write your app using the template provided in `/js`, you'll get the latest
+JavaScript with support for many features through [core-js](https://github.com/zloirock/core-js)
+polyfills. I'm not completely certain how well they will work.
 
 ### Roadmap
 
 At the moment, I believe these will be the next steps towards the first release:
 
-- node-like module system (currently only "core" module support)
+- node-like module system
+  - current `require` (poorly) emulates node behavior
 - proper file I/O -- even if completely synchronous
 - promise polyfill
-- `process` polyfill
-- a modern JS/TS app template
 - a version of 3DS.js that is able to run `index.js` from the SD card (no compilations)
   - a JS app loader app capable of launching other JS packages?
 
