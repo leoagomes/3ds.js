@@ -5,19 +5,19 @@
 
 #include "ev.hpp"
 
-#define TIMERS_STASH_KEY "::event_loop::timers::"
-#define TASKS_STASH_KEY "::event_loop::tasks::"
+#define TIMERS_STASH_KEY "event-loop/timers"
+#define TASKS_STASH_KEY "event-loop/tasks"
 
 #define TIMER_POINTER_KEY "pointer"
 #define TIMER_CALLBACK_KEY "callback"
 
 extern "C" {
-int add_timer(duk_context* context);
-int remove_timer(duk_context* context);
-int add_task(duk_context* context);
-int timer_finalizer(duk_context* context);
+duk_ret_t add_timer(duk_context* context);
+duk_ret_t remove_timer(duk_context* context);
+duk_ret_t add_task(duk_context* context);
+duk_ret_t remove_task(duk_context* context);
+duk_ret_t timer_finalizer(duk_context* context);
 };
-
 
 void initialize_heap_stash(duk_context* context);
 void push_event_loop_module(duk_context* context);
@@ -28,15 +28,11 @@ std::shared_ptr<events::timer>* get_timer_pointer(
     duk_idx_t index
 );
 
-namespace js::modules::event_loop {
-
-duk_ret_t open(duk_context* context) {
+duk_ret_t js::modules::event_loop::open(duk_context* context) {
     initialize_heap_stash(context);
     push_event_loop_module(context);
     return 1;
 }
-
-};
 
 void initialize_heap_stash(duk_context* context) {
     duk_push_heap_stash(context);
@@ -79,7 +75,7 @@ void require_timers_object(duk_context* context) {
  *
  * returns the timer id
  */
-int add_timer(duk_context* context) {
+duk_ret_t add_timer(duk_context* context) {
     auto interval = duk_require_number(context, 0);;
     duk_require_function(context, 1);
     require_timers_object(context);
@@ -106,8 +102,6 @@ int add_timer(duk_context* context) {
         if (!duk_is_function(context, -1))
             goto discard_timer;
 
-        printf("calling callback.\n");
-
         duk_pcall(context, 0);
         returned_timer_op = duk_get_int_default(
             context,
@@ -121,7 +115,6 @@ int add_timer(duk_context* context) {
         // should discard timer
 
         discard_timer:
-        printf("discarding timer...");
         duk_del_prop_string(context, timers_object_index, timer_id.c_str());
         return events::timer_op::discard;
     });
@@ -136,7 +129,7 @@ int add_timer(duk_context* context) {
  *
  * returns whether or not the timer was removed (true = removed, false = not found)
  */
-int remove_timer(duk_context* context) {
+duk_ret_t remove_timer(duk_context* context) {
     auto timer_id = duk_require_string(context, 0);
 
     require_timers_object(context);
@@ -156,11 +149,18 @@ int remove_timer(duk_context* context) {
     return 1;
 }
 
-int add_task(duk_context* context) {
+duk_ret_t add_task(duk_context* context) {
+    ev::loop->add_task([]() {
+
+    });
     return 0;
 }
 
-int timer_finalizer(duk_context* context) {
+duk_ret_t remove_task(duk_context* context) {
+    return 0;
+}
+
+duk_ret_t timer_finalizer(duk_context* context) {
     duk_require_object(context, 0);
     auto* timer_pointer = get_timer_pointer(context, -1);
     if (timer_pointer != nullptr) {

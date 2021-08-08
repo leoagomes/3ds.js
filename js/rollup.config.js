@@ -7,7 +7,7 @@ export default {
   input: './index.js',
   output: {
     file: '../romfs/index.js',
-    format: 'iife',
+    format: 'cjs',
   },
   plugins: [
     commonjs(),

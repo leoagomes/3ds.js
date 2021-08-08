@@ -11,6 +11,6 @@ extern duk_context* context;
 void init();
 void terminate();
 
-int run_file(const std::string& name);
+duk_ret_t run_file(const std::string& name);
 
 };

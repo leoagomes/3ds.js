@@ -29,7 +29,7 @@ void js::terminate() {
     terminate_context();
 }
 
-int js::run_file(const std::string& filename) {
+duk_ret_t js::run_file(const std::string& filename) {
     std::ifstream file(filename);
     std::stringstream buffer;
     buffer << file.rdbuf();
@@ -45,7 +45,8 @@ int js::run_file(const std::string& filename) {
 
 static void init_context() {
     js::context = duk_create_heap_default();
-    if (!js::context) { exit(1); }
+    if (!js::context)
+        exit(1);
 }
 
 static void terminate_context() {

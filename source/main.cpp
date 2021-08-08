@@ -38,6 +38,8 @@ int main(int argc, char* argv[]) {
 
     std::string filename = "romfs:/index.js";
     if (js::run_file(filename)) {
+        if (duk_has_prop_literal(js::context, -1, "stack"))
+            duk_get_prop_literal(js::context, -1, "stack");
         printf("[ERROR][JS] %s\n", duk_safe_to_string(js::context, -1));
     }
 

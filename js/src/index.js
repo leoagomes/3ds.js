@@ -1,5 +1,13 @@
-import foo from './foo.js';
+console.log('criando');
+// const p = new Promise((resolve, reject) => {
+//   console.log('resolved');
+//   resolve(false);
+// }).then((x) => {
+//   console.log('then');
+// });
 
-import {fopen} from '3ds/fs/sync';
+setTimeout(() => {
+  console.log('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+}, 3000);
 
-console.log(foo, fopen);
+console.log('depois de criar');
