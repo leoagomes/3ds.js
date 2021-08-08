@@ -16,7 +16,7 @@
 #include "ev.hpp"
 #include "js.hpp"
 
-#define RUN_TESTSUITE_JS 1
+#define RUN_TESTSUITE_JS 0
 
 // forward declarations
 void init_app();

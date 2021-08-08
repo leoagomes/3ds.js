@@ -1,0 +1,16 @@
+{
+  "name": "3dsapp",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "bundle": "rollup --config"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@rollup/plugin-json": "^4.1.0",
+    "rollup": "^2.56.0"
+  }
+}
