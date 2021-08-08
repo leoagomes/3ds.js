@@ -39,6 +39,7 @@ INCLUDES	:=	include lib/duktape lib
 GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
 ROMFS		:=	romfs
+JSINDEX		:= $(ROMFS)/index.js
 #GFXBUILD	:=	$(ROMFS)/gfx
 
 #---------------------------------------------------------------------------------
@@ -166,11 +167,14 @@ endif
 .PHONY: all clean test
 
 #---------------------------------------------------------------------------------
-all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES) $(JSINDEX)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $(MAKECMDGOALS)
 
 $(BUILD):
 	@mkdir -p $@
+
+$(JSINDEX):
+	cd js && yarn bundle
 
 ifneq ($(GFXBUILD),$(BUILD))
 $(GFXBUILD):
@@ -206,7 +210,6 @@ $(OUTPUT).3dsx	:	$(OUTPUT).elf $(_3DSXDEPS)
 $(OFILES_SOURCES) : $(HFILES)
 
 $(OUTPUT).elf	:	$(OFILES)
-
 #---------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data
 #---------------------------------------------------------------------------------
@@ -256,9 +259,6 @@ endef
 	@tex3ds -i $< -H $*.h -d $*.d -o $*.t3x
 
 -include $(DEPSDIR)/*.d
-
-test: CFLAGS += -DRUN_TESTS=1
-test: $(OUTPUT).3dsx
 
 #---------------------------------------------------------------------------------------
 endif
