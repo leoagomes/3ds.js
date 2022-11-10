@@ -1,4 +1,5 @@
 import { addTimer, removeTimer, TIMER_DISCARD, TIMER_REARM } from '3ds/event-loop';
+import { addNext } from './event-loop';
 
 globalThis.setTimeout = (callback, delay, ...args) =>
   addTimer(delay, () => {
@@ -17,3 +18,6 @@ globalThis.setInterval = (callback, delay, ...args) =>
 
 globalThis.clearInterval = (id) =>
   removeTimer(id);
+
+globalThis.setImmediate = (callback, ...args) =>
+  addNext(() => callback(...args));

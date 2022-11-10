@@ -86,4 +86,6 @@ declare module "3ds/event-loop" {
    *          timer with the given id was not found.
    */
   export function removeTimer(id: TimerId): boolean;
+
+  export function setOnTask(callback: () => void): void;
 }
