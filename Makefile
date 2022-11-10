@@ -51,7 +51,7 @@ CFLAGS	:=	-g -Wall -O2 -mword-relocations \
 			-ffunction-sections \
 			$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS
+CFLAGS	+=	$(INCLUDE) -DARM11 -D__3DS__
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17 -Wno-psabi
 
@@ -174,7 +174,7 @@ $(BUILD):
 	@mkdir -p $@
 
 $(JSINDEX):
-	cd js && yarn bundle
+	cd js && yarn && yarn bundle
 
 ifneq ($(GFXBUILD),$(BUILD))
 $(GFXBUILD):
