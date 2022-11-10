@@ -12,6 +12,7 @@
 
 #include "duktape.h"
 #include "events/loop.hpp"
+#include "js_modules_event_loop.hpp"
 
 #include "ev.hpp"
 #include "js.hpp"
@@ -53,6 +54,7 @@ int main(int argc, char* argv[]) {
             break;
 
         ev::loop->process();
+        js::modules::event_loop::pcall_on_task(js::context);
     }
 
     terminate_app();

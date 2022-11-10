@@ -10,13 +10,13 @@
 
 #define TIMER_POINTER_KEY "pointer"
 #define TIMER_CALLBACK_KEY "callback"
+#define ON_TASK_KEY "event-loop/on-task"
 
 extern "C" {
 duk_ret_t add_timer(duk_context* context);
 duk_ret_t remove_timer(duk_context* context);
-duk_ret_t add_task(duk_context* context);
-duk_ret_t remove_task(duk_context* context);
 duk_ret_t timer_finalizer(duk_context* context);
+duk_ret_t set_on_task(duk_context* context);
 };
 
 void initialize_heap_stash(duk_context* context);
@@ -49,7 +49,7 @@ void push_event_loop_module(duk_context* context) {
     duk_function_list_entry function_list[] = {
         { .key = "addTimer", .value = add_timer, .nargs = 3 },
         { .key = "removeTimer", .value = remove_timer, .nargs = 1 },
-        { .key = "addTask", .value = add_task, .nargs = 1 },
+        { .key = "setOnTask", .value = set_on_task, .nargs = 1 },
         { 0 }
     };
     duk_put_function_list(context, -1, function_list);
@@ -149,14 +149,12 @@ duk_ret_t remove_timer(duk_context* context) {
     return 1;
 }
 
-duk_ret_t add_task(duk_context* context) {
-    ev::loop->add_task([]() {
-
-    });
-    return 0;
-}
-
-duk_ret_t remove_task(duk_context* context) {
+duk_ret_t set_on_task(duk_context* context) {
+    duk_require_function(context, 0);
+    duk_push_heap_stash(context);
+    duk_dup(context, 0);
+    duk_put_prop_literal(context, -2, ON_TASK_KEY);
+    duk_pop(context);
     return 0;
 }
 
@@ -197,3 +195,20 @@ std::shared_ptr<events::timer>* get_timer_pointer(
     return static_cast<std::shared_ptr<events::timer>*>(timer_void_pointer);
 }
 
+duk_ret_t js::modules::event_loop::pcall_on_task(duk_context* context) {
+    if (context == NULL) {
+        printf("context is null\n");
+        return 0;
+    }
+    duk_push_heap_stash(context);
+    duk_get_prop_literal(context, -1, ON_TASK_KEY);
+    if (!duk_is_function(context, -1)) {
+        duk_pop_2(context);
+        return 0;
+    }
+    if (duk_pcall(context, 1) != 0) {
+        printf("Error in onTask: %s\n", duk_safe_to_string(context, -1));
+    }
+    duk_pop(context);
+    return 0;
+}
