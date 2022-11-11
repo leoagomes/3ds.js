@@ -202,13 +202,11 @@ duk_ret_t js::modules::event_loop::pcall_on_task(duk_context* context) {
     }
     duk_push_heap_stash(context);
     duk_get_prop_literal(context, -1, ON_TASK_KEY);
-    if (!duk_is_function(context, -1)) {
-        duk_pop_2(context);
-        return 0;
+    if (duk_is_function(context, -1)) {
+        if (duk_pcall(context, 0) != 0) {
+            printf("Error in onTask: %s\n", duk_safe_to_string(context, -1));
+        }
     }
-    if (duk_pcall(context, 1) != 0) {
-        printf("Error in onTask: %s\n", duk_safe_to_string(context, -1));
-    }
-    duk_pop(context);
+    duk_pop_2(context);
     return 0;
 }
