@@ -5,5 +5,6 @@
  */
 import './polyfill';
 // import 'core-js/stable';
-// import 'regenerator-runtime/runtime';
+import 'promise-polyfill/dist/polyfill';
+import 'regenerator-runtime/runtime';
 import './src';

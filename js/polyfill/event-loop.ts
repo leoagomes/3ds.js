@@ -58,7 +58,7 @@ export const addNext = (callback: () => void) =>
 setOnTask(() => {
   if (currentQueue.isEmpty() && nextQueue.isEmpty())  return;
 
-  console.log('onTask');
+  // console.log('onTask');
   currentQueue.run();
   currentQueue = nextQueue;
   nextQueue = new TaskQueue();

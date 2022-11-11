@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "core-js": "^3.16.0",
+    "promise-polyfill": "^8.2.3",
     "regenerator-runtime": "^0.13.9"
   },
   "devDependencies": {

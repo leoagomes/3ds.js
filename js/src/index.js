@@ -1,13 +1,19 @@
-console.log('criando');
+console.log('start');
 
-const delay = (seconds) => new Promise((resolve) => {
-  setTimeout(resolve, seconds * 1000);
+const onestep = () => new Promise((resolve) => {
+  setImmediate(resolve);
+});
+
+const delay = (millis) => new Promise((resolve) => {
+  setTimeout(resolve, millis);
 });
 
 (async () => {
-  console.log('hey')
-  await delay(2);
-  console.log('ho');
+  console.log('one');
+  await onestep();
+  console.log('two');
+  await delay(2000);
+  console.log('three');
 })();
 
-console.log('depois de criar');
+console.log('end');
